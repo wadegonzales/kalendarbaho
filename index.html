@@ -143,7 +143,7 @@ input:focus{border-color:var(--acc)}
 
 <script>
 const $=s=>document.querySelector(s);
-const MN=['January','February','March','April','May','June','July','August','September','October','November','December'],MS=MN.map(m=>m.slice(0,3)),DF=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'],DS=DF.map(d=>d.slice(0,3));
+const MN=['January','February','March','April','May','June','July','August','September','October','November','December'],MS=MN.map(m=>m.slice(0,3)),DF=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],DS=DF.map(d=>d.slice(0,3));
 let S={duties:{},def:{in:'08:00',out:'17:00'},wd:[1,2,3,4,5],owd:[0,6],wk:true,mode:'m'};
 try{const r=localStorage.getItem('duty-cal-v1');if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
 const save=()=>{try{localStorage.setItem('duty-cal-v1',JSON.stringify(S))}catch(e){}};
@@ -158,7 +158,7 @@ const mins=t=>{const[a,b]=t.split(':').map(Number);return a*60+b};
 const hrs=(i,o)=>(i&&o)?((mins(o)-mins(i)+1440)%1440)/60:0;
 const fh=h=>(Number.isInteger(h)?h:h.toFixed(1))+'h';
 const f12=t=>{let[h,m]=t.split(':').map(Number);const s=h>=12?'PM':'AM';return (h%12||12)+':'+pad(m)+' '+s};
-const mon=d=>{const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());x.setDate(x.getDate()-((x.getDay()+6)%7));return x};
+const mon=d=>{const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());x.setDate(x.getDate()-x.getDay());return x};
 const esc=s=>s.replace(/</g,'&lt;');
 
 function dates(){
@@ -166,7 +166,7 @@ function dates(){
   if(S.mode==='d')return[new Date(y,m,cur.getDate())];
   let a,b;
   if(S.mode==='w'){a=mon(cur);b=new Date(a);b.setDate(a.getDate()+6)}
-  else{a=mon(new Date(y,m,1));b=new Date(y,m+1,0);b.setDate(b.getDate()+((7-b.getDay())%7))}
+  else{a=mon(new Date(y,m,1));b=new Date(y,m+1,0);b.setDate(b.getDate()+(6-b.getDay()))}
   for(let d=new Date(a);d<=b;d.setDate(d.getDate()+1))if(S.wk||(d.getDay()%6))out.push(new Date(d));
   return out;
 }
@@ -175,17 +175,17 @@ function render(){
   let tM,tY=y;
   if(M==='m')tM=MN[m];
   else if(M==='w'){const a=mon(cur),b=new Date(a);b.setDate(a.getDate()+6);tM=MS[a.getMonth()]+' '+a.getDate()+' – '+(b.getMonth()!==a.getMonth()?MS[b.getMonth()]+' ':'')+b.getDate()}
-  else tM=DF[(cur.getDay()+6)%7]+', '+MS[m]+' '+cur.getDate();
+  else tM=DF[cur.getDay()]+', '+MS[m]+' '+cur.getDate();
   $('#tM').textContent=tM;$('#tY').textContent=tY;
   document.querySelectorAll('#modes button').forEach(b=>b.classList.toggle('on',b.dataset.m===M));
   $('#wk').classList.toggle('on',S.wk);$('#wk').style.opacity=M==='d'?.4:1;
   $('#defIn').value=S.def.in;$('#defOut').value=S.def.out;
-  $('#chips').innerHTML=[1,2,3,4,5,6,0].map(i=>`<button class="chip ${S.wd.includes(i)?'on':''}" data-i="${i}">${DS[(i+6)%7][0]}</button>`).join('');
-  $('#offchips').innerHTML=[1,2,3,4,5,6,0].map(i=>`<button class="chip o ${S.owd.includes(i)?'on':''}" data-i="${i}">${DS[(i+6)%7][0]}</button>`).join('');
+  $('#chips').innerHTML=[0,1,2,3,4,5,6].map(i=>`<button class="chip ${S.wd.includes(i)?'on':''}" data-i="${i}">${DS[i][0]}</button>`).join('');
+  $('#offchips').innerHTML=[0,1,2,3,4,5,6].map(i=>`<button class="chip o ${S.owd.includes(i)?'on':''}" data-i="${i}">${DS[i][0]}</button>`).join('');
   const cols=M==='d'?1:(S.wk?7:5);
-  const head=M==='d'?[]:(S.wk?DF:DF.slice(0,5));
+  const head=M==='d'?[]:(S.wk?DF:DF.slice(1,6));
   $('#dows').style.gridTemplateColumns=$('#grid').style.gridTemplateColumns=`repeat(${cols},minmax(0,1fr))`;
-  $('#dows').innerHTML=head.map((d,i)=>`<div class="dow"><span class="f">${d}</span><span class="s">${DS[i]}</span></div>`).join('');
+  $('#dows').innerHTML=head.map((d,i)=>`<div class="dow"><span class="f">${d}</span><span class="s">${d.slice(0,3)}</span></div>`).join('');
   $('#grid').className='grid '+M;
   let html='',cnt=0,tot=0,off=0;
   ds.forEach((dt,i)=>{

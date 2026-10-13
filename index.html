@@ -43,6 +43,7 @@ input:focus{border-color:var(--acc)}
 .chip{width:34px;height:34px;border-radius:50%;background:var(--hi);display:grid;place-items:center;font-size:12px;font-weight:700;transition:background .2s}
 .chip.on{background:var(--acc);color:var(--aink)}
 .pri{background:var(--acc);color:var(--aink)}.pri:hover{background:var(--acc);filter:brightness(1.1)}
+.pill.off,.chip.on.o{background:#E6C384;color:#0B0B0E}.pill.off:hover{background:#E6C384;filter:brightness(1.1)}
 .dows,.grid{display:grid}
 .dow{text-align:center;font-size:12px;color:var(--mute);padding:10px 0}
 .dow .s{display:none}
@@ -114,7 +115,9 @@ input:focus{border-color:var(--acc)}
     <label>Time in<input type="time" id="defIn"></label>
     <label>Time out<input type="time" id="defOut"></label>
     <label>Duty weekdays<div class="chips" id="chips"></div></label>
-    <button class="pill pri" id="fill">Fill this month</button>
+    <label>Day off weekdays<div class="chips" id="offchips"></div></label>
+    <button class="pill pri" id="fill">Fill duty days</button>
+    <button class="pill off" id="fillOff">Fill days off</button>
     <button class="pill" id="clear">Clear month</button>
   </div>
 </div></div>
@@ -137,7 +140,7 @@ input:focus{border-color:var(--acc)}
 <script>
 const $=s=>document.querySelector(s);
 const MN=['January','February','March','April','May','June','July','August','September','October','November','December'],MS=MN.map(m=>m.slice(0,3)),DF=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'],DS=DF.map(d=>d.slice(0,3));
-let S={duties:{},def:{in:'08:00',out:'17:00'},wd:[1,2,3,4,5],wk:true,mode:'m'};
+let S={duties:{},def:{in:'08:00',out:'17:00'},wd:[1,2,3,4,5],owd:[0,6],wk:true,mode:'m'};
 try{const r=localStorage.getItem('duty-cal-v1');if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
 const save=()=>{try{localStorage.setItem('duty-cal-v1',JSON.stringify(S))}catch(e){}};
 let theme='dark';try{theme=localStorage.getItem('duty-theme')||'dark'}catch(e){}
@@ -174,6 +177,7 @@ function render(){
   $('#wk').classList.toggle('on',S.wk);$('#wk').style.opacity=M==='d'?.4:1;
   $('#defIn').value=S.def.in;$('#defOut').value=S.def.out;
   $('#chips').innerHTML=[1,2,3,4,5,6,0].map(i=>`<button class="chip ${S.wd.includes(i)?'on':''}" data-i="${i}">${DS[(i+6)%7][0]}</button>`).join('');
+  $('#offchips').innerHTML=[1,2,3,4,5,6,0].map(i=>`<button class="chip o ${S.owd.includes(i)?'on':''}" data-i="${i}">${DS[(i+6)%7][0]}</button>`).join('');
   const cols=M==='d'?1:(S.wk?7:5);
   const head=M==='d'?[]:(S.wk?DF:DF.slice(0,5));
   $('#dows').style.gridTemplateColumns=$('#grid').style.gridTemplateColumns=`repeat(${cols},minmax(0,1fr))`;
@@ -203,10 +207,14 @@ $('#modes').onclick=e=>{const b=e.target.closest('button');if(b){S.mode=b.datase
 $('#wk').onclick=()=>{S.wk=!S.wk;save();render()};
 $('#cfg').onclick=()=>$('#drawer').classList.toggle('open');
 $('#chips').onclick=e=>{const b=e.target.closest('.chip');if(!b)return;const i=+b.dataset.i;S.wd=S.wd.includes(i)?S.wd.filter(x=>x!==i):[...S.wd,i];save();b.classList.toggle('on')};
+$('#offchips').onclick=e=>{const b=e.target.closest('.chip');if(!b)return;const i=+b.dataset.i;S.owd=S.owd.includes(i)?S.owd.filter(x=>x!==i):[...S.owd,i];save();b.classList.toggle('on')};
 $('#defIn').onchange=e=>{S.def.in=e.target.value;save()};
 $('#defOut').onchange=e=>{S.def.out=e.target.value;save()};
 $('#fill').onclick=()=>{const y=cur.getFullYear(),m=cur.getMonth(),dim=new Date(y,m+1,0).getDate();
   for(let d=1;d<=dim;d++){const dt=new Date(y,m,d);if(S.wd.includes(dt.getDay())){const k=key(dt);if(!S.duties[k])S.duties[k]={in:S.def.in,out:S.def.out,note:''}}}
+  save();render()};
+$('#fillOff').onclick=()=>{const y=cur.getFullYear(),m=cur.getMonth(),dim=new Date(y,m+1,0).getDate();
+  for(let d=1;d<=dim;d++){const dt=new Date(y,m,d);if(S.owd.includes(dt.getDay())){const k=key(dt);if(!S.duties[k])S.duties[k]={off:true,note:''}}}
   save();render()};
 $('#clear').onclick=()=>{const p=key(new Date(cur.getFullYear(),cur.getMonth(),1)).slice(0,8);
   Object.keys(S.duties).forEach(k=>{if(k.startsWith(p))delete S.duties[k]});save();render()};

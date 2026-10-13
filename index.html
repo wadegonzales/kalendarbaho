@@ -166,6 +166,8 @@ label{font-size:11px}
   .selbar span{font-size:14px}
   .modal{padding:16px}
 }
+.sync{cursor:pointer}
+.sbbox{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;border-top:1px dashed var(--line);padding-top:10px}.sbbox[hidden]{display:none}.sbbox label{flex:1 1 200px}.sbbox input{width:100%}
 </style>
 </head>
 <body>
@@ -191,6 +193,12 @@ label{font-size:11px}
     <button class="pill pri" id="fill">Fill duty days</button>
     <button class="pill off" id="fillOff">Fill days off</button>
     <button class="pill" id="clear">Clear month</button>
+    <div class="sbbox" id="sbBox" hidden>
+      <label>Supabase URL<input type="text" id="sbUrl" placeholder="https://xxxx.supabase.co"></label>
+      <label>Anon key<input type="text" id="sbKey" placeholder="eyJ…"></label>
+      <label>Sync passphrase<input type="text" id="sbPass" placeholder="long, same on every device"></label>
+      <button class="pill pri" id="sbGo">Connect &amp; sync</button>
+    </div>
   </div>
 </div></div>
 
@@ -361,7 +369,7 @@ const setSync=(t,c)=>{const e=$('#sync');e.textContent=t;e.dataset.s=c};
 const settingsOf=()=>({def:S.def,wd:S.wd,owd:S.owd});
 const monthsOf=d=>{const o={};for(const k in d){const m=k.slice(0,7);(o[m]=o[m]||{})[k]=d[k]}return o};
 function applySettings(v){if(!v)return;if(v.def)S.def=v.def;if(v.wd)S.wd=v.wd;if(v.owd)S.owd=v.owd}
-function scheduleSync(){if(!col)return;setSync('Saving…','busy');clearTimeout(syncTimer);syncTimer=setTimeout(flush,700)}
+function scheduleSync(){if(sbOn){sbSchedule();return}if(!col)return;setSync('Saving…','busy');clearTimeout(syncTimer);syncTimer=setTimeout(flush,700)}
 async function flush(){
   syncTimer=null;if(!col)return;
   if(writing){syncTimer=setTimeout(flush,400);return}
@@ -378,20 +386,20 @@ async function flush(){
     }
     const ss=canon(settingsOf());
     if(lastSent.settings!==ss){await col.doc('settings').set(settingsOf());lastSent.settings=ss}
-    if(!syncTimer)setSync('Synced across devices','ok');
+    if(!syncTimer)setSync('Synced · '+stamp(),'ok');
   }catch(e){
     if(e&&['invalid_argument','revoked','not_granted','capability_disabled'].includes(e.code)){col=null;setSync('Saved on this device only','off')}
     else{setSync('Sync failed, retrying…','bad');syncTimer=setTimeout(flush,5000)}
   }finally{writing=false}
 }
-function onSnap(snap){
-  if(snap.metadata&&snap.metadata.fromCache)return;
+const stamp=()=>new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+function absorb(snap,isFirst){
   const days={},sent={};let settings=null;
   snap.docs.forEach(d=>{if(!d.exists)return;const v=d.data()||{};
     if(d.id==='settings')settings=v;
     else if(d.id[0]==='m'&&v.days){Object.assign(days,v.days);sent[d.id.slice(1)]=canon(v.days)}});
-  if(!firstDone){
-    firstDone=true;const flag='duty-synced-'+uid;let synced=false;
+  if(isFirst){
+    const flag='duty-synced-'+uid;let synced=false;
     try{synced=!!localStorage.getItem(flag)}catch(e){}
     S.duties=(!synced&&Object.keys(S.duties).length)?Object.assign({},S.duties,days):days;
     lastSent=sent;
@@ -401,23 +409,95 @@ function onSnap(snap){
   }
   if(syncTimer||writing)return;
   const same=canon(days)===canon(S.duties)&&(!settings||canon({def:settings.def,wd:settings.wd,owd:settings.owd})===canon(settingsOf()));
-  if(same){setSync('Synced across devices','ok');return}
+  if(same)return;
   S.duties=days;lastSent=sent;
   if(settings){applySettings(settings);lastSent.settings=canon(settingsOf())}
-  persist();render();setSync('Synced across devices','ok');
+  persist();render();
+}
+function onSnap(snap){
+  if(snap.metadata&&snap.metadata.fromCache)return;
+  if(!firstDone){firstDone=true;absorb(snap,true);return}
+  absorb(snap,false);if(!syncTimer&&!writing)setSync('Synced · '+stamp(),'ok');
+}
+let lastPull=0,subscribed=false;
+async function pull(){
+  if(!col)return;lastPull=Date.now();
+  try{
+    const snap=await col.get();
+    if(!firstDone){firstDone=true;absorb(snap,true)}else absorb(snap,false);
+    if(!syncTimer&&!writing)setSync('Synced · '+stamp(),'ok');
+  }catch(e){setSync('Could not reach your account ('+((e&&e.code)||'error')+'). Tap to retry','bad')}
 }
 async function connect(){
   try{
-    if(!window.claude||!claude.use){setSync('Saved on this device only','off');return}
+    if(!window.claude||!claude.use){sbInit();return}
     setSync('Connecting…','busy');
-    setTimeout(()=>{if(!firstDone&&col)setSync('Offline, saved on this device','off')},12000);
     const [db,user]=await Promise.all([claude.use('db'),claude.use('user')]);
+    if(!db){setSync('Sync unavailable here. Sign in to claude.ai. Tap to retry','off');return}
     uid=user?await user.id():null;
-    if(!db||!uid){setSync('Saved on this device only','off');return}
+    if(!uid){setSync('Sync unavailable: no signed-in account. Tap to retry','off');return}
     col=db.collection('data/users/'+uid);
-    col.onSnapshot(onSnap,()=>setSync('Sync unavailable, saved on this device','bad'));
-  }catch(e){setSync('Saved on this device only','off')}
+    await pull();
+    if(!subscribed){subscribed=true;
+      col.onSnapshot(onSnap,e=>setSync('Live sync stopped ('+((e&&e.code)||'error')+'). Tap to retry','bad'));
+      document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-lastPull>3000)pull()});
+      addEventListener('focus',()=>{if(Date.now()-lastPull>3000)pull()});
+      setInterval(()=>{if(!document.hidden)pull()},60000);
+    }
+  }catch(e){setSync('Sync error ('+((e&&(e.code||e.message))||'unknown')+'). Tap to retry','bad')}
 }
+$('#sync').onclick=()=>{setSync('Syncing…','busy');if(sbOn)sbSync();else if(col)pull();else connect()};
+/* ---- fallback sync for copies hosted outside Claude (Vercel, Render, etc.): Supabase RPC ---- */
+const SB_DEFAULT={url:'',key:''};
+let sbOn=false,sbCfg=null,sbBase={},sbBaseSet=null,sbT=null,sbBusy=false,sbPoll=null,sbListen=false;
+const sha=async t=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t)))].map(b=>b.toString(16).padStart(2,'0')).join('');
+const clone=o=>JSON.parse(JSON.stringify(o));
+async function sbRpc(fn,body){
+  const r=await fetch(sbCfg.url.replace(/\/$/,'')+'/rest/v1/rpc/'+fn,{method:'POST',headers:{'Content-Type':'application/json',apikey:sbCfg.key,Authorization:'Bearer '+sbCfg.key},body:JSON.stringify(body)});
+  if(!r.ok)throw new Error(fn+' '+r.status);const t=await r.text();return t?JSON.parse(t):null;
+}
+function sbSchedule(){setSync('Saving…','busy');clearTimeout(sbT);sbT=setTimeout(sbSync,800)}
+async function sbSync(){
+  if(!sbOn)return;
+  if(sbBusy){sbT=setTimeout(sbSync,500);return}
+  sbBusy=true;
+  try{
+    const remote=await sbRpc('get_duty_calendar',{p_id:sbCfg.id});
+    const rd=(remote&&remote.duties)||{},rs=remote&&remote.settings;
+    const out=Object.assign({},rd);
+    for(const k in S.duties)if(canon(S.duties[k])!==canon(sbBase[k]))out[k]=S.duties[k];
+    for(const k in sbBase)if(!(k in S.duties))delete out[k];
+    const localSet=canon(settingsOf());
+    const sOut=sbBaseSet===null?(rs||settingsOf()):(localSet!==sbBaseSet?settingsOf():(rs||settingsOf()));
+    if(!remote||canon(out)!==canon(rd)||canon(sOut)!==canon(rs||{}))await sbRpc('save_duty_calendar',{p_id:sbCfg.id,p_data:{duties:out,settings:sOut}});
+    const changed=canon(out)!==canon(S.duties)||canon(sOut)!==localSet;
+    S.duties=out;applySettings(sOut);sbBase=clone(out);sbBaseSet=canon(settingsOf());persist();
+    if(changed)render();
+    setSync('Synced · '+stamp(),'ok');
+  }catch(e){setSync('Sync failed ('+((e&&e.message)||'error')+'). Retrying…','bad');sbT=setTimeout(sbSync,8000)}
+  finally{sbBusy=false}
+}
+function sbStart(){
+  sbOn=true;setSync('Connecting…','busy');sbSync();
+  clearInterval(sbPoll);sbPoll=setInterval(()=>{if(!document.hidden)sbSync()},30000);
+  if(!sbListen){sbListen=true;document.addEventListener('visibilitychange',()=>{if(!document.hidden)sbSync()})}
+}
+async function sbInit(){
+  $('#sbBox').hidden=false;
+  let c={};try{c=JSON.parse(localStorage.getItem('duty-sb')||'{}')}catch(e){}
+  $('#sbUrl').value=c.url||SB_DEFAULT.url;$('#sbKey').value=c.key||SB_DEFAULT.key;$('#sbPass').value=c.pass||'';
+  if(c.url&&c.key&&c.pass){
+    try{sbCfg=Object.assign({},c,{id:await sha(c.pass+'|duty-cal')})}catch(e){setSync('Sync needs https','bad');return}
+    sbStart();
+  }else setSync('Saved on this device only. Set up sync in the ▦ panel','off');
+}
+$('#sbGo').onclick=async()=>{
+  const c={url:$('#sbUrl').value.trim(),key:$('#sbKey').value.trim(),pass:$('#sbPass').value};
+  if(!c.url||!c.key||c.pass.length<8){setSync('Enter the URL, the key and a passphrase of 8+ characters','bad');return}
+  try{localStorage.setItem('duty-sb',JSON.stringify(c))}catch(e){}
+  try{sbCfg=Object.assign({},c,{id:await sha(c.pass+'|duty-cal')})}catch(e){setSync('Sync needs https','bad');return}
+  sbBase={};sbBaseSet=null;sbStart();
+};
 render();
 connect();
 </script>

@@ -35,7 +35,7 @@ button.pri{background:var(--seal);color:#fff}
 button.pri:hover{filter:brightness(1.12);background:var(--seal);color:#fff}
 .stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
 .stat{flex:1 1 130px;background:var(--card);border-radius:10px;padding:12px 16px;animation:rise .6s cubic-bezier(.2,.8,.2,1) both;transition:background .4s}
-.stat:nth-child(2){animation-delay:.08s}.stat:nth-child(3){animation-delay:.16s}
+.stat:nth-child(2){animation-delay:.08s}.stat:nth-child(3){animation-delay:.16s}.stat:nth-child(4){animation-delay:.24s}
 .stat b{display:block;font-size:30px;font-family:"Dela Gothic One",sans-serif;font-weight:400;color:var(--accent)}
 .stat span{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--mute)}
 .setup{background:var(--card);border-radius:10px;padding:16px;margin-bottom:16px;animation:rise .6s .22s cubic-bezier(.2,.8,.2,1) both;transition:background .4s}
@@ -57,8 +57,9 @@ input:focus{border-color:var(--accent)}
 .cell .n{font-family:"Dela Gothic One",sans-serif;font-size:18px;font-weight:400}
 .cell.duty{background:var(--accent);color:var(--aink)}
 .cell.duty:hover{background:var(--accent);filter:brightness(1.1);color:var(--aink)}
-.cell.duty::after{content:"勤";position:absolute;right:6px;top:6px;background:var(--seal);color:#fff;width:20px;height:20px;font-size:12px;display:grid;place-items:center;border-radius:50%;animation:stamp .5s cubic-bezier(.2,.9,.3,1.4) both;animation-delay:calc(var(--i)*16ms + .25s)}
+.cell.duty::after,.cell.off::after{content:"勤";position:absolute;right:6px;top:6px;background:var(--seal);color:#fff;width:20px;height:20px;font-size:12px;display:grid;place-items:center;border-radius:50%;animation:stamp .5s cubic-bezier(.2,.9,.3,1.4) both;animation-delay:calc(var(--i)*16ms + .25s)}
 .cell.today{outline:2px solid var(--seal);outline-offset:2px;animation:pop .5s cubic-bezier(.2,.8,.2,1) both,ring 1.8s ease-in-out infinite;animation-delay:calc(var(--i)*16ms),.6s}
+.cell.off::after{content:"休"}
 .cell .t{font-size:12px;line-height:1.3}
 .cell .h{font-size:11px;opacity:.85}
 .cell .note{font-size:10px;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -70,6 +71,13 @@ input:focus{border-color:var(--accent)}
 .modal .row label{flex:1}
 .modal input{width:100%}
 .hrs{font-size:14px;margin:8px 0 16px;color:var(--mute)}
+.seg{display:flex;gap:6px;margin-bottom:14px}
+.seg button{flex:1}
+.seg button.on{background:var(--accent);color:var(--aink)}
+.sw{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.sq{width:34px;height:34px;padding:0;border-radius:50%;font-size:13px;display:grid;place-items:center;transition:transform .2s}
+.sq:hover{transform:scale(1.15)}
+.sq.on{outline:2px solid var(--ink);outline-offset:2px}
 .sig{display:flex;align-items:center;justify-content:flex-end;gap:14px;margin-top:28px}
 .sig .ln{flex:1;height:2px;background:var(--line);transform-origin:left;animation:grow 1s .9s cubic-bezier(.2,.8,.2,1) both}
 .sig .nm{font-size:clamp(26px,6vw,40px);letter-spacing:.14em;color:var(--accent);display:flex}
@@ -81,7 +89,7 @@ input:focus{border-color:var(--accent)}
 @keyframes stamp{from{opacity:0;transform:scale(2.2) rotate(-25deg)}to{opacity:1;transform:none}}
 @keyframes drift{to{transform:translateX(-50%)}}
 @keyframes ring{50%{outline-offset:5px;outline-color:transparent}}
-@media(max-width:560px){.cell{min-height:70px;padding:5px}.cell .note{display:none}.cell .n{font-size:15px}.cell .t{font-size:10px}.cell.duty::after{display:none}.row{gap:10px}}
+@media(max-width:560px){.cell{min-height:70px;padding:5px}.cell .note{display:none}.cell .n{font-size:15px}.cell .t{font-size:10px}.cell.duty::after,.cell.off::after{display:none}.row{gap:10px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -105,6 +113,7 @@ input:focus{border-color:var(--accent)}
   <div class="stat"><b id="sDays">0</b><span>Duty days</span></div>
   <div class="stat"><b id="sHrs">0h</b><span>Total hours</span></div>
   <div class="stat"><b id="sAvg">0h</b><span>Avg / day</span></div>
+  <div class="stat"><b id="sOff">0</b><span>Days off</span></div>
 </div>
 
 <div class="setup">
@@ -129,15 +138,17 @@ input:focus{border-color:var(--accent)}
 <div class="ov" id="ov">
   <div class="modal">
     <h3 class="disp" id="mTitle"></h3>
+    <div class="seg" id="seg"><button data-t="duty">Duty</button><button data-t="off">Day off</button></div>
     <div class="row">
       <label>Time in<input type="time" id="mIn"></label>
       <label>Time out<input type="time" id="mOut"></label>
     </div>
     <label style="margin-bottom:10px">Note<input type="text" id="mNote" placeholder="Ward 3, night shift…" maxlength="40"></label>
     <div class="hrs" id="mHrs"></div>
+    <label style="margin-bottom:8px">Day color</label><div class="sw" id="sw"></div>
     <div class="row">
-      <button class="pri" id="mSave">Save duty</button>
-      <button id="mDel">Off day</button>
+      <button class="pri" id="mSave">Save</button>
+      <button id="mDel">Clear</button>
       <button id="mX">Close</button>
     </div>
   </div>
@@ -159,6 +170,9 @@ const key=(y,m,d)=>y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0
 const mins=t=>{const[a,b]=t.split(':').map(Number);return a*60+b};
 const hrs=(i,o)=>(i&&o)?((mins(o)-mins(i)+1440)%1440)/60:0;
 const fh=h=>(Number.isInteger(h)?h:h.toFixed(1))+'h';
+let mType='duty',mColor=null;
+const PAL=[null,'#E6C384','#98BB6C','#7AA89F','#957FB8','#FFA066','#E46876'],OFFC='#E6C384';
+const cellBg=v=>{const c=v.color||(v.off?OFFC:null);return c?`background:${c};color:#0B0B0E`:''};
 const f12=t=>{let[h,m]=t.split(':').map(Number);const s=h>=12?'PM':'AM';h=h%12||12;return h+':'+String(m).padStart(2,'0')+s};
 
 function tween(el,to,fmt){
@@ -175,28 +189,33 @@ function render(swap){
   $('#chips').innerHTML=DN.map((d,i)=>`<button class="chip ${S.wd.includes(i)?'on':''}" data-i="${i}">${d}</button>`).join('');
   $('#dows').innerHTML=DN.map(d=>`<div class="dow">${d}</div>`).join('');
   const first=new Date(y,m,1).getDay(),dim=new Date(y,m+1,0).getDate(),now=new Date();
-  let html='',cnt=0,tot=0;
+  let html='',cnt=0,tot=0,off=0;
   for(let i=0;i<first;i++)html+='<div class="cell empty"></div>';
   for(let d=1;d<=dim;d++){
     const k=key(y,m,d),v=S.duties[k];
     const isT=now.getFullYear()===y&&now.getMonth()===m&&now.getDate()===d;
     let inner=`<div class="n">${d}</div>`;
-    if(v){const h=hrs(v.in,v.out);cnt++;tot+=h;
+    if(v&&v.off){off++;inner+=`<div><div class="t">DAY OFF</div>${v.note?`<div class="note">${v.note.replace(/</g,'&lt;')}</div>`:''}</div>`}else if(v){const h=hrs(v.in,v.out);cnt++;tot+=h;
       inner+=`<div><div class="t">${f12(v.in)}<br>${f12(v.out)}</div><div class="h">${fh(h)}</div>${v.note?`<div class="note">${v.note.replace(/</g,'&lt;')}</div>`:''}</div>`}
-    html+=`<button class="cell ${v?'duty':''} ${isT?'today':''}" style="--i:${first+d}" data-k="${k}" data-d="${d}">${inner}</button>`;
+    html+=`<button class="cell ${v?(v.off?'off':'duty'):''} ${isT?'today':''}" style="--i:${first+d};${v?cellBg(v):''}" data-k="${k}" data-d="${d}">${inner}</button>`;
   }
   $('#grid').innerHTML=html;
   tween($('#sDays'),cnt,v=>Math.round(v));
   tween($('#sHrs'),tot,fh);
   tween($('#sAvg'),cnt?tot/cnt:0,fh);
+  tween($('#sOff'),off,v=>Math.round(v));
 }
 function openEd(k,d){
-  editing=k;const v=S.duties[k]||{};
+  editing=k;const v=S.duties[k]||{};mType=v.off?'off':'duty';mColor=v.color||null;
   $('#mTitle').textContent=MN[view.getMonth()].slice(0,3)+' '+d+', '+view.getFullYear();
   $('#mIn').value=v.in||S.def.in;$('#mOut').value=v.out||S.def.out;$('#mNote').value=v.note||'';
   upd();$('#ov').classList.add('show');
 }
-const upd=()=>{$('#mHrs').textContent='Shift length: '+fh(hrs($('#mIn').value,$('#mOut').value))};
+const upd=()=>{const off=mType==='off';
+  $('#mHrs').textContent=off?'':'Shift length: '+fh(hrs($('#mIn').value,$('#mOut').value));
+  $('#mHrs').style.display=off?'none':'';$('#mIn').closest('.row').style.display=off?'none':'';
+  document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.t===mType));
+  $('#sw').innerHTML=PAL.map(c=>`<button class="sq ${c===mColor?'on':''}" data-c="${c||''}" style="background:${c||'var(--card2)'}" aria-label="Color">${c?'':'✕'}</button>`).join('')};
 const close=()=>{$('#ov').classList.remove('show');editing=null};
 
 $('#grid').onclick=e=>{const c=e.target.closest('.cell:not(.empty)');if(c)openEd(c.dataset.k,c.dataset.d)};
@@ -214,7 +233,9 @@ $('#prev').onclick=()=>{view.setMonth(view.getMonth()-1);render(1)};
 $('#next').onclick=()=>{view.setMonth(view.getMonth()+1);render(1)};
 $('#today').onclick=()=>{view=new Date();view.setDate(1);render(1)};
 $('#mIn').oninput=$('#mOut').oninput=upd;
-$('#mSave').onclick=()=>{if(!editing)return;S.duties[editing]={in:$('#mIn').value,out:$('#mOut').value,note:$('#mNote').value.trim()};save();close();render()};
+$('#seg').onclick=e=>{const b=e.target.closest('button');if(b){mType=b.dataset.t;upd()}};
+$('#sw').onclick=e=>{const b=e.target.closest('.sq');if(b){mColor=b.dataset.c||null;upd()}};
+$('#mSave').onclick=()=>{if(!editing)return;S.duties[editing]={in:$('#mIn').value,out:$('#mOut').value,note:$('#mNote').value.trim(),off:mType==='off',color:mColor};save();close();render()};
 $('#mDel').onclick=()=>{if(editing){delete S.duties[editing];save()}close();render()};
 $('#mX').onclick=close;
 $('#ov').onclick=e=>{if(e.target.id==='ov')close()};

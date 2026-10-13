@@ -16,7 +16,7 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
 *,*::before,*::after{box-sizing:inherit}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:"Zen Kaku Gothic New","Hiragino Sans",system-ui,sans-serif;font-weight:500;transition:background .35s,color .35s}
 button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;padding:0}
-.app{max-width:1200px;margin:0 auto;padding:18px 14px 36px}
+.app{max-width:1200px;margin:0 auto;padding:18px 14px 90px}
 .bar{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px;animation:fade .5s both}
 .brand{display:flex;align-items:center;gap:12px}
 .logo{width:44px;height:44px;flex:none;animation:stamp .6s .1s cubic-bezier(.2,.9,.3,1.4) both}
@@ -86,16 +86,18 @@ input:focus{border-color:var(--acc)}
 .sq:hover{transform:scale(1.15)}.sq.on{outline:2px solid var(--ink);outline-offset:2px}
 .hrs{font-size:13px;color:var(--mute);margin:2px 0 14px}
 .btns{display:flex;gap:8px}.btns button{height:36px;padding:0 14px;border-radius:8px;background:var(--hi);font-weight:700}
-.sig{display:flex;align-items:center;justify-content:flex-end;gap:12px;margin-top:26px}
-.sig .ln{flex:1;height:1px;background:var(--line);transform-origin:left;animation:grow 1s .6s both}
-.nm{font-family:"Dela Gothic One",sans-serif;font-size:26px;letter-spacing:.14em;color:var(--acc);display:flex}
-.nm span{animation:fade .6s both;animation-delay:calc(var(--d)*.1s + .8s)}
-.hk{width:26px;height:26px;border-radius:50%;background:var(--bad);color:#fff;display:grid;place-items:center;font-size:13px;animation:stamp .5s 1.3s cubic-bezier(.2,.9,.3,1.4) both}
+.ck{display:none;position:absolute;right:8px;top:8px;width:16px;height:16px;border-radius:50%;border:1.5px solid var(--mute);z-index:2;font-style:normal;font-size:10px;line-height:13px;text-align:center;color:var(--aink)}
+.selmode .ck{display:block}.selmode .cell::after{display:none}
+.cell.sel{outline:2px solid var(--acc);outline-offset:-2px}
+.cell.sel .ck{background:var(--acc);border-color:var(--acc)}.cell.sel .ck::after{content:"✓"}
+.pill.on{background:var(--acc);color:var(--aink)}
+.selbar{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translate(-50%,160%);display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 8px 8px 14px;z-index:8;opacity:0;pointer-events:none;transition:transform .35s cubic-bezier(.2,.9,.3,1.2),opacity .25s;white-space:nowrap}
+.selbar.show{transform:translate(-50%,0);opacity:1;pointer-events:auto}
+.selbar span{font-size:13px;font-weight:700;margin-right:4px}
 @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @keyframes pulse{50%{opacity:.25}}
-@keyframes grow{from{transform:scaleX(0)}to{transform:none}}
 @keyframes stamp{from{opacity:0;transform:scale(2.2) rotate(-25deg)}to{opacity:1;transform:none}}
-@media(max-width:700px){.logo{width:36px;height:36px}.app{padding:12px 6px 30px}.bar{padding:0 6px}.cell{min-height:84px;padding:6px 3px}.r{padding:3px;gap:0}.r .ic,.r b{display:none}.r em{flex:1;text-align:center;font-size:10px}.r.m span{display:none}.dow .f{display:none}.dow .s{display:inline}.wk span{display:none}.cell::after{display:none}}
+@media(max-width:700px){.logo{width:36px;height:36px}.app{padding:12px 6px 90px}.bar{padding:0 6px}.cell{min-height:84px;padding:6px 3px}.r{padding:3px;gap:0}.r .ic,.r b{display:none}.r em{flex:1;text-align:center;font-size:10px}.r.m span{display:none}.dow .f{display:none}.dow .s{display:inline}.wk span{display:none}.cell::after{display:none}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -107,6 +109,7 @@ input:focus{border-color:var(--acc)}
     <button class="ib" id="prev" aria-label="Previous">‹</button>
     <button class="ib" id="next" aria-label="Next">›</button>
     <button class="pill" id="today">Today</button>
+    <button class="pill" id="selBtn">Select</button>
     <div class="wk"><span>Weekends</span><button class="sw" id="wk" aria-label="Toggle weekends"></button></div>
     <div class="seg2" id="modes"><button data-m="d">Day</button><button data-m="w">Week</button><button data-m="m">Month</button></div>
     <button class="ib" id="cfg" aria-label="Setup default shift"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></button>
@@ -128,8 +131,9 @@ input:focus{border-color:var(--acc)}
 
 <div class="dows" id="dows"></div>
 <div class="grid" id="grid"></div>
-<footer class="sig"><div class="ln"></div><div class="nm" aria-label="Wade"><span style="--d:0">W</span><span style="--d:1">A</span><span style="--d:2">D</span><span style="--d:3">E</span></div><div class="hk">印</div></footer>
 </div>
+
+<div class="selbar" id="selbar"><span id="selN">0 selected</span><button class="pill" id="selAll">All</button><button class="pill pri" id="selEdit">Plot days</button><button class="pill" id="selX">Cancel</button></div>
 
 <div class="ov" id="ov"><div class="modal">
   <h3 id="mTitle"></h3>
@@ -151,7 +155,7 @@ let theme='dark';try{theme=localStorage.getItem('duty-theme')||'dark'}catch(e){}
 const setTheme=t=>{theme=t;document.documentElement.dataset.theme=t;try{localStorage.setItem('duty-theme',t)}catch(e){}};
 setTheme(theme);$('#tgl').onclick=()=>setTheme(theme==='dark'?'light':'dark');
 
-let cur=new Date(),editing=null,mType='duty',mColor=null;
+let cur=new Date(),editing=null,mType='duty',mColor=null,sel=new Set(),selMode=false,bulk=false;
 const PAL=[null,'#E6C384','#98BB6C','#7AA89F','#957FB8','#FFA066','#E46876'],OFFC='#E6C384';
 const pad=n=>String(n).padStart(2,'0'),key=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
 const mins=t=>{const[a,b]=t.split(':').map(Number);return a*60+b};
@@ -198,7 +202,7 @@ function render(){
         rows=`<div class="r"><i class="ic">→</i><b>In</b><em>${f12(v.in)}</em></div><div class="r"><i class="ic">←</i><b>Out</b><em>${f12(v.out)}</em></div><div class="r m"><i class="ic h"></i><span>${v.note?esc(v.note):'Shift'}</span><em class="g">${fh(h)}</em></div>`}
     }
     const st=`--i:${i}${v?';--c:'+(c||'var(--acc)'):''}`;
-    html+=`<button class="cell ${v?'has':''} ${isT?'today':''} ${inM?'':'out'}" style="${st}" data-k="${k}" data-l="${MS[dt.getMonth()]} ${dt.getDate()}, ${dt.getFullYear()}"><div class="n">${lab}</div>${rows}</button>`;
+    html+=`<button class="cell ${v?'has':''} ${isT?'today':''} ${inM?'':'out'} ${sel.has(k)?'sel':''}" style="${st}" data-k="${k}" data-l="${MS[dt.getMonth()]} ${dt.getDate()}, ${dt.getFullYear()}"><div class="n">${lab}</div><i class="ck"></i>${rows}</button>`;
   });
   $('#grid').innerHTML=html;
   $('#sub').textContent=`${cnt} duty day${cnt===1?'':'s'} · ${fh(tot)} · ${off} off`;
@@ -233,14 +237,20 @@ const upd=()=>{const off=mType==='off';
   $('#mHrs').style.display=off?'none':'';$('#mIn').closest('.row').style.display=off?'none':'';
   document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.t===mType));
   $('#sw').innerHTML=PAL.map(c=>`<button class="sq ${c===mColor?'on':''}" data-c="${c||''}" style="background:${c||'var(--hi)'}" aria-label="Color">${c?'':'✕'}</button>`).join('')};
-const close=()=>{$('#ov').classList.remove('show');editing=null};
-$('#grid').onclick=e=>{const c=e.target.closest('.cell');if(c)openEd(c.dataset.k,c.dataset.l)};
+const close=()=>{$('#ov').classList.remove('show');editing=null;bulk=false};
+$('#grid').onclick=e=>{const c=e.target.closest('.cell');if(!c)return;if(selMode){const k=c.dataset.k;sel.has(k)?sel.delete(k):sel.add(k);c.classList.toggle('sel',sel.has(k));syncSel()}else openEd(c.dataset.k,c.dataset.l)};
 $('#mIn').oninput=$('#mOut').oninput=upd;
 $('#seg').onclick=e=>{const b=e.target.closest('button');if(b){mType=b.dataset.t;upd()}};
 $('#sw').onclick=e=>{const b=e.target.closest('.sq');if(b){mColor=b.dataset.c||null;upd()}};
-$('#mSave').onclick=()=>{if(!editing)return;S.duties[editing]={in:$('#mIn').value,out:$('#mOut').value,note:$('#mNote').value.trim(),off:mType==='off',color:mColor};save();close();render()};
-$('#mDel').onclick=()=>{if(editing){delete S.duties[editing];save()}close();render()};
+$('#mSave').onclick=()=>{const b=bulk,ks=b?[...sel]:(editing?[editing]:[]);if(!ks.length)return;const o={in:$('#mIn').value,out:$('#mOut').value,note:$('#mNote').value.trim(),off:mType==='off',color:mColor};ks.forEach(k=>S.duties[k]={...o});save();close();if(b)exitSel();else render()};
+$('#mDel').onclick=()=>{const b=bulk;(b?[...sel]:(editing?[editing]:[])).forEach(k=>delete S.duties[k]);save();close();if(b)exitSel();else render()};
 $('#mX').onclick=close;$('#ov').onclick=e=>{if(e.target.id==='ov')close()};
+const syncSel=()=>{$('#selN').textContent=sel.size+' selected';$('#selbar').classList.toggle('show',selMode);$('#selBtn').classList.toggle('on',selMode);$('#selBtn').textContent=selMode?'Done':'Select';document.body.classList.toggle('selmode',selMode)};
+const exitSel=()=>{selMode=false;sel.clear();syncSel();render()};
+function openBulk(){if(!sel.size)return;editing=null;bulk=true;mType='duty';mColor=null;$('#mTitle').textContent=sel.size+' day'+(sel.size===1?'':'s')+' selected';$('#mIn').value=S.def.in;$('#mOut').value=S.def.out;$('#mNote').value='';upd();$('#ov').classList.add('show')}
+$('#selBtn').onclick=()=>{if(selMode)exitSel();else{selMode=true;syncSel()}};
+$('#selX').onclick=exitSel;$('#selEdit').onclick=openBulk;
+$('#selAll').onclick=()=>{document.querySelectorAll('.cell:not(.out)').forEach(c=>{sel.add(c.dataset.k);c.classList.add('sel')});syncSel()};
 render();
 </script>
 </body>

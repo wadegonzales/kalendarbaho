@@ -197,6 +197,13 @@ label{font-size:11px}
 .sl input{width:100%;min-width:0;padding:11px 12px;font-size:15px}
 .sl.fx .fl{display:grid;place-items:center;min-height:44px;border-radius:8px;background:color-mix(in srgb,var(--acc) 14%,transparent);color:var(--acc);font-weight:800;letter-spacing:.16em;font-size:14px}
 @media(max-width:700px){.sl{grid-template-columns:96px minmax(0,1fr);gap:8px}}
+.tmm{max-width:540px;display:flex;flex-direction:column;gap:12px;overflow:hidden}
+.tmm h3{margin:0}
+.tmm .tpl{flex:1;min-height:140px}
+.tmm input[type=date]{font:inherit;font-weight:700;color:var(--ink);background:var(--hi);border:2px solid transparent;border-radius:8px;padding:7px 9px;outline:0;color-scheme:dark light}
+.tmm input[type=date]:focus{border-color:var(--acc)}
+.tmm .btns{flex-wrap:wrap}
+button:disabled{opacity:.45;cursor:not-allowed}
 </style>
 </head>
 <body>
@@ -242,14 +249,6 @@ label{font-size:11px}
 </div>
 </div>
 
-<aside class="tp" id="tp" aria-label="Daily tasks">
-  <div class="tph"><h3>Daily tasks</h3><button class="ib" id="tpX" aria-label="Close">✕</button></div>
-  <div class="tpd"><button class="ib" id="tpPrev" aria-label="Previous day">‹</button><input type="date" id="tpDate"><button class="ib" id="tpNext" aria-label="Next day">›</button><button class="pill" id="tpToday">Today</button></div>
-  <div class="tps" id="tpStatus"></div>
-  <div class="tkbtns"><button id="tpCopy">Copy last day</button><button id="tpClear">Clear tasks</button></div>
-  <div class="tpl" id="tpList"></div>
-  <div class="tpf"><button class="pill pri" id="tpExDay">Export this day</button><button class="pill" id="tpExMonth">Export month</button></div>
-</aside>
 <div class="selbar" id="selbar"><span id="selN">0 selected</span><button class="pill" id="selAll">All</button><button class="pill" id="selDtr">Export DTR</button><button class="pill pri" id="selEdit">Plot days</button><button class="pill" id="selX">Cancel</button></div>
 
 <div class="ov" id="ov"><div class="modal">
@@ -259,7 +258,16 @@ label{font-size:11px}
   <label style="margin-bottom:10px">Note<input type="text" id="mNote" placeholder="Ward 3, night shift…" maxlength="40"></label>
     <div class="hrs" id="mHrs"></div>
   <label>Day color</label><div class="sw3" id="sw"></div>
-  <div class="btns"><button class="pri" id="mSave">Save</button><button id="mDel">Clear</button><button id="mX">Close</button></div>
+  <div class="btns"><button class="pri" id="mSave">Save</button><button id="mDel">Clear</button><button id="mTasks">Daily tasks</button><button id="mX">Close</button></div>
+</div></div>
+
+<div class="ov" id="tm"><div class="modal tmm">
+  <h3 id="tmTitle">Daily tasks</h3>
+  <div class="tpd"><button class="ib" id="tpPrev" aria-label="Previous day">‹</button><input type="date" id="tpDate"><button class="ib" id="tpNext" aria-label="Next day">›</button><button class="pill" id="tpToday">Today</button></div>
+  <div class="tps" id="tpStatus"></div>
+  <div class="tkbtns"><button id="tpCopy">Copy last day</button><button id="tpClear">Clear boxes</button></div>
+  <div class="tpl" id="tpList"></div>
+  <div class="btns"><button class="pri" id="tmSave">Save</button><button id="tmExp">Save &amp; export</button><button id="tmX">Cancel</button></div>
 </div></div>
 
 <div class="ov" id="cf"><div class="modal"><h3 id="cfT"></h3><p class="cfm" id="cfM"></p><div class="btns"><button class="pri" id="cfOk">Confirm</button><button id="cfNo">Cancel</button></div></div></div>
@@ -378,7 +386,7 @@ function openEd(k,l){
   $('#mTitle').textContent=l;$('#mIn').value=v.in||S.def.in;$('#mOut').value=v.out||S.def.out;$('#mNote').value=v.note||'';
   upd();$('#ov').classList.add('show');
 }
-const upd=()=>{const off=mType==='off';
+const upd=()=>{const off=mType==='off';$('#mTasks').style.display=(bulk||off)?'none':'';
   $('#mHrs').textContent=off?'':'Shift length: '+fh(hrs($('#mIn').value,$('#mOut').value));
   $('#mHrs').style.display=off?'none':'';$('#mIn').closest('.row').style.display=off?'none':'';
   document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.t===mType));
@@ -608,64 +616,81 @@ $('#selDtr').onclick=()=>{if(sel.size)exportDTR([...sel],'your selection')};
 $('#dtrName').onchange=e=>{S.name=e.target.value.trim()||S.name;save()};
 $('#dtrPos').onchange=e=>{S.pos=e.target.value.trim()||S.pos;save()};
 
-/* ---- Tasks panel ---- */
+/* ---- Tasks modal: fixed schedule, type the tasks, press Save ---- */
 let quiet=false;
 const rq=()=>{quiet=true;render();quiet=false};
-let tpDate=key(new Date()),tpT=null;
+let tpDate=key(new Date()),tmDraft=[],tmDirty=false;
 const dOf=k=>new Date(k+'T00:00:00');
+const blankDraft=()=>SLOTS.map(()=>'');
+const dayLabel=k=>{const d=dOf(k);return MS[d.getMonth()]+' '+d.getDate()+', '+d.getFullYear()};
 function tpHead(){
   const v=S.duties[tpDate],dt=dOf(tpDate);
-  const st=!v?'Not plotted yet. Typing a task plots it as a duty day ('+f12(S.def.in)+' – '+f12(S.def.out)+').':v.off?'This day is marked as a day off.':'Duty '+f12(v.in)+' – '+f12(v.out)+' · '+plural(nt(v),'task');
+  const st=!v?'Not plotted yet. Saving tasks plots it as a duty day ('+f12(S.def.in)+' – '+f12(S.def.out)+').':v.off?'This day is marked as a day off.':'Duty '+f12(v.in)+' – '+f12(v.out);
   $('#tpStatus').textContent=DF[dt.getDay()]+', '+MN[dt.getMonth()]+' '+dt.getDate()+' · '+st;
+  $('#tmTitle').textContent='Daily tasks · '+MS[dt.getMonth()]+' '+dt.getDate();
 }
 function tpDraw(){
-  const v=S.duties[tpDate],off=!!(v&&v.off),tk=(v&&!v.off&&v.tk)||[],dis=off?' disabled':'';
-  $('#tpDate').value=tpDate;tpHead();
-  let h=off?'<div class="tps" style="padding:6px 0 10px">Make it a duty day to type tasks. <button class="pill" id="tpMake">Make duty day</button></div>':'';
+  const v=S.duties[tpDate],off=!!(v&&v.off),dis=off?' disabled':'';
+  $('#tpDate').value=tpDate;tpHead();$('#tmSave').disabled=off;$('#tmExp').disabled=off;
+  let h=off?'<div class="tps" style="padding:4px 0 10px">Make it a duty day to type tasks. <button class="pill" id="tpMake">Make duty day</button></div>':'';
   SLOTS.forEach((sl,r)=>{
     const tm=`<div class="tm"><b>${f12(sl.i)}</b>to ${f12(sl.o)}</div>`;
     h+=sl.f?`<div class="sl fx">${tm}<div class="fl">${sl.f}</div></div>`
-      :`<div class="sl">${tm}<input type="text" data-r="${r}" value="${ea(tk[r]||'')}" placeholder="Type your task…" maxlength="120" aria-label="Task ${f12(sl.i)} to ${f12(sl.o)}"${dis}></div>`;
+      :`<div class="sl">${tm}<input type="text" data-r="${r}" value="${ea(tmDraft[r]||'')}" placeholder="Type your task…" maxlength="120" aria-label="Task ${f12(sl.i)} to ${f12(sl.o)}"${dis}></div>`;
   });
   $('#tpList').innerHTML=h;
 }
-function tpSave(){
-  let v=S.duties[tpDate];if(v&&v.off)return;
-  const tk=SLOTS.map((sl,r)=>{const el=document.querySelector('#tpList input[data-r="'+r+'"]');return el?el.value.trim():''});
-  clearTimeout(tpT);tpT=setTimeout(rq,400);
-  if(!tk.some(x=>x)){if(v&&v.tk){delete v.tk;save();tpHead()}return}
-  if(!v)v=S.duties[tpDate]={in:S.def.in,out:S.def.out,note:'',off:false,color:null};
-  v.tk=tk;save();tpHead();
+function tmLoad(){
+  const v=S.duties[tpDate];
+  tmDraft=SLOTS.map((sl,r)=>sl.f?'':((v&&!v.off&&v.tk&&v.tk[r])||''));
+  tmDirty=false;tpDraw();
 }
-$('#tpList').oninput=e=>{if(e.target.dataset.r!==undefined)tpSave()};
-$('#tpList').onkeydown=e=>{if(e.key==='Enter'&&e.target.dataset.r!==undefined){e.preventDefault();const all=[...document.querySelectorAll('#tpList input')],i=all.indexOf(e.target);if(all[i+1])all[i+1].focus()}};
+function tmOpen(k){tpDate=k||key(new Date());tmLoad();$('#tm').classList.add('show')}
+async function tmClose(force){
+  if(!force&&tmDirty&&!await ask('Discard unsaved tasks?','The tasks you typed on this day haven\'t been saved.','Discard'))return false;
+  $('#tm').classList.remove('show');tmDirty=false;return true;
+}
+function tmApply(){
+  let v=S.duties[tpDate];if(v&&v.off)return false;
+  const tk=tmDraft.map(x=>(x||'').trim());
+  if(tk.some(x=>x)){if(!v)v=S.duties[tpDate]={in:S.def.in,out:S.def.out,note:'',off:false,color:null};v.tk=tk}
+  else if(v&&v.tk)delete v.tk;
+  save();rq();tmDirty=false;return true;
+}
+async function tmGo(k){
+  if(tmDirty&&!await ask('Discard unsaved tasks?','The tasks you typed on this day haven\'t been saved.','Discard'))return;
+  tpDate=k||key(new Date());tmLoad();
+}
+const tmShift=n=>{const d=dOf(tpDate);d.setDate(d.getDate()+n);tmGo(key(d))};
+$('#tpList').oninput=e=>{const r=e.target.dataset.r;if(r!==undefined){tmDraft[+r]=e.target.value;tmDirty=true}};
+$('#tpList').onkeydown=e=>{if(e.key==='Enter'&&e.target.dataset.r!==undefined){e.preventDefault();const all=[...document.querySelectorAll('#tpList input')],i=all.indexOf(e.target);if(all[i+1])all[i+1].focus();else $('#tmSave').focus()}};
 $('#tpList').onclick=async e=>{
   if(e.target.id!=='tpMake')return;
   if(!await ask('Make this a duty day?','The day off will become a duty day ('+f12(S.def.in)+' – '+f12(S.def.out)+').','Make duty day'))return;
   S.duties[tpDate]={in:S.def.in,out:S.def.out,note:'',off:false,color:null};save();rq();tpDraw();
 };
 $('#tpCopy').onclick=async()=>{
+  const v=S.duties[tpDate];
+  if(v&&v.off)return ask('This day is a day off','Make it a duty day first.','',true);
   const ks=Object.keys(S.duties).filter(k=>k<tpDate&&!S.duties[k].off&&nt(S.duties[k])).sort();
   if(!ks.length)return ask('Nothing to copy','No earlier day has tasks yet.','',true);
-  const cur=S.duties[tpDate];
-  if(cur&&cur.off)return ask('This day is a day off','Make it a duty day first.','',true);
-  if(nt(cur)&&!await ask('Replace this day\'s tasks?','Your tasks on this day will be replaced with the ones from '+ks[ks.length-1]+'.','Replace'))return;
-  const v=cur||(S.duties[tpDate]={in:S.def.in,out:S.def.out,note:'',off:false,color:null});
-  v.tk=clone(S.duties[ks[ks.length-1]].tk);save();rq();tpDraw();
+  if(tmDraft.some(x=>x&&x.trim())&&!await ask('Replace the tasks in the boxes?','They will be replaced with the tasks from '+dayLabel(ks[ks.length-1])+'.','Replace'))return;
+  const src=S.duties[ks[ks.length-1]].tk;
+  tmDraft=SLOTS.map((sl,r)=>sl.f?'':(src[r]||''));tmDirty=true;tpDraw();
 };
 $('#tpClear').onclick=async()=>{
-  const v=S.duties[tpDate];if(!nt(v))return;
-  if(!await ask('Clear all tasks?','This empties every task box on this day.','Clear tasks'))return;
-  delete v.tk;save();rq();tpDraw();
+  if(!tmDraft.some(x=>x&&x.trim()))return;
+  if(!await ask('Clear all task boxes?','This empties the boxes. Nothing changes until you press Save.','Clear boxes'))return;
+  tmDraft=blankDraft();tmDirty=true;tpDraw();
 };
-const tpGo=k=>{tpDate=k||key(new Date());tpDraw()};
-const tpShift=n=>{const d=dOf(tpDate);d.setDate(d.getDate()+n);tpGo(key(d))};
-$('#tpDate').onchange=e=>tpGo(e.target.value);
-$('#tpPrev').onclick=()=>tpShift(-1);$('#tpNext').onclick=()=>tpShift(1);$('#tpToday').onclick=()=>tpGo();
-$('#tpBtn').onclick=()=>{const o=$('#tp').classList.toggle('open');if(o)tpDraw();$('#tpBtn').classList.toggle('on',o)};
-$('#tpX').onclick=()=>{$('#tp').classList.remove('open');$('#tpBtn').classList.remove('on')};
-$('#tpExDay').onclick=()=>{const d=dOf(tpDate);exportDTR([tpDate],MS[d.getMonth()]+' '+d.getDate()+', '+d.getFullYear())};
-$('#tpExMonth').onclick=()=>{const d=dOf(tpDate),p=tpDate.slice(0,8);exportDTR(Object.keys(S.duties).filter(k=>k.startsWith(p)),MN[d.getMonth()]+' '+d.getFullYear())};
+$('#tmSave').onclick=()=>{if(tmApply())tmClose(true)};
+$('#tmExp').onclick=async()=>{if(!tmApply())return;const k=tpDate;await tmClose(true);exportDTR([k],dayLabel(k))};
+$('#tmX').onclick=()=>tmClose();
+$('#tm').onclick=e=>{if(e.target.id==='tm')tmClose()};
+$('#tpDate').onchange=e=>tmGo(e.target.value);
+$('#tpPrev').onclick=()=>tmShift(-1);$('#tpNext').onclick=()=>tmShift(1);$('#tpToday').onclick=()=>tmGo();
+$('#tpBtn').onclick=()=>tmOpen();
+$('#mTasks').onclick=()=>{if(editing)tmOpen(editing)};
 render();
 connect();
 </script>
